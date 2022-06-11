@@ -1,62 +1,64 @@
 #define GL_SILENCE_DEPRECATION
 
+#include <osg/io_utils>
+#include <osg/PositionAttitudeTransform>
 #include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
-#include <osg/Node>
-
 #include <iostream>
 
 using std::cout;
 using std::endl;
 
-// override默认NodeVisitor的遍历函数, 将其cout
-class InfoVisitor : public osg::NodeVisitor
+class RotateCallback: public osg::NodeCallback
 {
 public:
-  InfoVisitor() : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN), _indent(0) {}
+  RotateCallback(): _rotateZ(0.0) {}
 
-  virtual void apply(osg::Node &node)
+  virtual void operator()(osg::Node *node, osg::NodeVisitor *nv)
   {
-    for (int i = 0; i < _indent; ++i)
-      cout << " ";
-    cout << "[" << _indent + 1 << "]" << node.libraryName() << "::" << node.className() << endl;
-    _indent++;
-    traverse(node);
-    _indent--;
-  }
-
-  // node叶子结点
-  virtual void apply(osg::Geode &node)
-  {
-    for (int i = 0; i < _indent; ++i)
-      cout << " ";
-    cout << "[" << _indent + 1 << "]" << node.libraryName() << "::" << node.className() << endl;
-    for (unsigned int n = 0; n < node.getNumDrawables(); ++n)
+    if (osg::PositionAttitudeTransform *pat = dynamic_cast<osg::PositionAttitudeTransform *>(node))
     {
-      osg::Drawable *drawable = node.getDrawable(n);
-      if (!drawable)
-        continue;
-      for (int i = 0; i <= _indent; ++i)
-        cout << " ";
-      cout << drawable->libraryName() << "::" << drawable->className() << endl;
+      osg::Quat quat(osg::DegreesToRadians(_rotateZ), osg::Z_AXIS);
+      pat->setAttitude(quat);
+      _rotateZ -= 1.0;
     }
-    _indent++;
-    traverse(node);
-    _indent--;
+    traverse(node, nv);
   }
-
 protected:
-  int _indent;
+  double _rotateZ;
+};
+
+class InfoCallback: public osg::NodeCallback
+{
+public:
+  virtual void operator()(osg::Node *node, osg::NodeVisitor *nv)
+  {
+    if (osg::PositionAttitudeTransform *pat = dynamic_cast<osg::PositionAttitudeTransform *>(node))
+    {
+      double angle = 0.0;
+      osg::Vec3 axis;
+      pat->getAttitude().getRotate(angle, axis);
+
+      cout << "Node is rotating around the (" << axis << ")axis, "
+        << osg::RadiansToDegrees(angle) << " degrees" << endl;
+    }
+    traverse(node, nv);
+  }
 };
 
 int main(int argc, char** argv)
 {
   osg::ArgumentParser arguments(&argc, argv);
-  osg::Node *root = osgDB::readNodeFiles(arguments);
-  if (!root) root = osgDB::readNodeFile("axes.osgt");
+  osg::Node *model = osgDB::readNodeFiles(arguments);
+  if (!model) model = osgDB::readNodeFile("cow.osg");
 
-  InfoVisitor infoVisitor;
-  if (root) root->accept(infoVisitor);
+  auto pat = new osg::PositionAttitudeTransform;
+  pat->addChild(model);
 
-  return 0;
+  pat->setUpdateCallback(new RotateCallback);
+  pat->addUpdateCallback(new InfoCallback);
+
+  osgViewer::Viewer viewer;
+  viewer.setSceneData(pat);
+  return viewer.run();
 }

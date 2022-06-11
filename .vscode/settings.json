@@ -5,6 +5,11 @@
     "node": "cpp",
     "object": "cpp",
     "argumentparser": "cpp",
-    "array": "cpp"
+    "array": "cpp",
+    "framestamp": "cpp",
+    "quat": "cpp",
+    "positionattitudetransform": "cpp",
+    "group": "cpp",
+    "transform": "cpp"
   }
 }
