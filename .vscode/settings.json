@@ -1,0 +1,10 @@
+{
+  "files.associations": {
+    "viewer": "cpp",
+    "readfile": "cpp",
+    "node": "cpp",
+    "object": "cpp",
+    "argumentparser": "cpp",
+    "array": "cpp"
+  }
+}

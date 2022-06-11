@@ -5,9 +5,9 @@ set(CMAKE_CXX_STANDARD 11)
 
 set(CMAKE_BUILD_TYPE Debug)
 
-include_directories(/usr/local/Cellar/open-scene-graph/3.6.5_1/include)
+include_directories(/usr/local/Cellar/open-scene-graph/3.6.5_1/include include)
 
-find_package(OpenSceneGraph REQUIRED COMPONENTS osgDB osgGA osgUtil osgViewer)
+find_package(OpenSceneGraph REQUIRED COMPONENTS osgDB osgGA osgUtil osgViewer osg osgAnimation osgFX osgManipulator osgParticle osgPresentation osgShadow osgSim osgTerrain osgText osgVolume osgWidget)
 
 add_executable(main main.cpp)
 
