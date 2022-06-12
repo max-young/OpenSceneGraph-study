@@ -11,6 +11,15 @@
     "positionattitudetransform": "cpp",
     "group": "cpp",
     "transform": "cpp",
-    "ref_ptr": "cpp"
+    "ref_ptr": "cpp",
+    "atomic": "cpp",
+    "matrixd": "cpp",
+    "matrixf": "cpp",
+    "state": "cpp",
+    "valueobject": "cpp",
+    "observer_ptr": "cpp",
+    "block": "cpp",
+    "operationthread": "cpp",
+    "stateset": "cpp"
   }
 }
