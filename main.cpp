@@ -1,59 +1,89 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/LineWidth>
-#include <osg/Geometry>
-#include <osg/Geode>
-#include <osgViewer/Viewer>
+#include <osg/io_utils>
+#include <osg/TriangleFunctor>
+#include <osg/Drawable>
+#include <osgDB/ReadFile>
+#include <iostream>
+#include <string>
 
-class DynamicLineCallback : public osg::Drawable::UpdateCallback
+using std::string;
+using std::cout;
+using std::endl;
+
+class AttributePrinter: public osg::Drawable::AttributeFunctor
 {
 public:
-  DynamicLineCallback() : _angle(0.0) {}
-
-  virtual void update(osg::NodeVisitor *nv, osg::Drawable *drawable)
+  using AttributeType = osg::Drawable::AttributeType;
+  inline const string getTypeName(AttributeType type)
   {
-    osg::Geometry *geom = dynamic_cast<osg::Geometry *>(drawable);
-    if (!geom)
-      return;
-
-    osg::Vec3Array *vertices = dynamic_cast<osg::Vec3Array *>(geom->getVertexArray());
-    if (vertices)
-    {
-      for (osg::Vec3Array::iterator itr = vertices->begin(); itr != vertices->end() - 1; ++itr)
-        itr->set((*(itr + 1)));
-
-      _angle += 1.0 / 10.0;
-      osg::Vec3 &pt = vertices->back();
-      pt.set(10.0 * cos(_angle), 0.0, 10.0 * sin(_angle));
-      vertices->dirty();
-    }
+    static const string typeNames[] = {
+      "Vertices", "Weights", "Normals", "colors", "Secondary Colors",
+      "Fog Coordinates", "Attribute6", "Attribute7",
+      "Texture Coords 0", "Texture Coords 1", "Texture Coords 2",
+      "Texture Coords 3", "Texture Coords 4", "Texture Coords 5",
+      "Texture Coords 6", "Texture Coords 7"
+    };
+    return typeNames[type];
   }
 
-protected:
-  float _angle;
+  template<typename T>
+  void printInfo(AttributeType type, unsigned int size, T* front)
+  {
+    cout << "***" << getTypeName(type) << ": " << size << endl;
+    for (unsigned int i = 0; i < size; ++i)
+      cout << "(" << *(front+i) << ")";
+    cout << endl << endl;
+  }
+
+  virtual void apply(AttributeType type, unsigned int size, float *front) {printInfo(type, size, front);}
+  virtual void apply(AttributeType type, unsigned int size, osg::Vec2 *front) {printInfo(type, size, front);}
+  virtual void apply(AttributeType type, unsigned int size, osg::Vec3 *front) {printInfo(type, size, front);}
+  virtual void apply(AttributeType type, unsigned int size, osg::Vec4 *front) {printInfo(type, size, front);}
 };
 
-int main(int argc, char **argv)
+struct TrianglePrinter
 {
-  osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array(10);
-  for (unsigned int i = 0; i < 10; ++i)
-    (*vertices)[i].set(float(i), 0.0, 0.0);
+  TrianglePrinter(){cout << "***Triangles***" << endl;}
 
-  osg::ref_ptr<osg::Geometry> lineGeom = new osg::Geometry;
-  lineGeom->setVertexArray(vertices.get());
-  lineGeom->addPrimitiveSet(new osg::DrawArrays(osg::DrawArrays::LINE_STRIP, 0, 10));
+  void operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3) const
+  {cout << "(" << v1 << ");(" << v2 << ");(" << v3 << ")" << endl;}
+};
 
-  lineGeom->setInitialBound(osg::BoundingBox(osg::Vec3(-10.0, -10.0, -10.0), osg::Vec3(10.0, 10.0, 10.0)));
-  lineGeom->setUpdateCallback(new DynamicLineCallback);
-  lineGeom->setUseDisplayList(false);
-  lineGeom->setUseVertexBufferObjects(true);
+class FindGeometryVisitor: public osg::NodeVisitor
+{
+public:
+  FindGeometryVisitor(): osg::NodeVisitor(TRAVERSE_ALL_CHILDREN) {}
+    
+  virtual void apply(osg::Node &node){traverse(node);}
 
-  osg::ref_ptr<osg::Geode> geode = new osg::Geode;
-  geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-  geode->getOrCreateStateSet()->setAttribute(new osg::LineWidth(2.0));
-  geode->addDrawable(lineGeom.get());
+  virtual void apply(osg::Geode &node)
+  {
+    for(unsigned int i = 0; i < node.getNumDrawables(); ++i)
+    {
+      osg::Drawable *drawable = node.getDrawable(i);
+      if (!drawable) continue;
+      cout << "[" << drawable->libraryName() << "::" << drawable->className() << "]" << endl;
 
-  osgViewer::Viewer viewer;
-  viewer.setSceneData(geode.get());
-  return viewer.run();
+      AttributePrinter attrPrinter;
+      drawable->accept(attrPrinter);
+
+      osg::TriangleFunctor<TrianglePrinter> triPrinter;
+      drawable->accept(triPrinter);
+
+      cout << endl;
+    }
+    traverse(node);
+  }
+};
+
+int main(int argc, char** argv)
+{
+  osg::ArgumentParser arguments(&argc, argv);
+  osg::Node *model = osgDB::readNodeFiles(arguments);
+  if(!model) osgDB::readNodeFile("house.ive");
+
+  FindGeometryVisitor fgv;
+  if(model) model->accept(fgv);
+  return 0;
 }

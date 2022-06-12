@@ -20,6 +20,7 @@
     "observer_ptr": "cpp",
     "block": "cpp",
     "operationthread": "cpp",
-    "stateset": "cpp"
+    "stateset": "cpp",
+    "trianglefunctor": "cpp"
   }
 }
