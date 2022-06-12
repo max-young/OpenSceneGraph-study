@@ -1,64 +1,52 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/io_utils>
+#include <osg/AutoTransform>
+#include <osg/MatrixTransform>
 #include <osg/PositionAttitudeTransform>
 #include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
-#include <iostream>
 
-using std::cout;
-using std::endl;
-
-class RotateCallback: public osg::NodeCallback
+// 始终面对屏幕
+osg::Transform* createAutoTransform(double posX, osg::Node *model)
 {
-public:
-  RotateCallback(): _rotateZ(0.0) {}
+  osg::ref_ptr<osg::AutoTransform> at = new osg::AutoTransform;
+  at->setAutoRotateMode(osg::AutoTransform::ROTATE_TO_SCREEN);
+  at->setPosition(osg::Vec3(posX, 0.0, 0.0));
+  at->addChild(model);
+  return at.release();
+}
 
-  virtual void operator()(osg::Node *node, osg::NodeVisitor *nv)
-  {
-    if (osg::PositionAttitudeTransform *pat = dynamic_cast<osg::PositionAttitudeTransform *>(node))
-    {
-      osg::Quat quat(osg::DegreesToRadians(_rotateZ), osg::Z_AXIS);
-      pat->setAttitude(quat);
-      _rotateZ -= 1.0;
-    }
-    traverse(node, nv);
-  }
-protected:
-  double _rotateZ;
-};
-
-class InfoCallback: public osg::NodeCallback
+// 延Z轴逆时针旋转45度
+osg::Transform* createMatrixTransform(double posX, double rotateZ, osg::Node *model)
 {
-public:
-  virtual void operator()(osg::Node *node, osg::NodeVisitor *nv)
-  {
-    if (osg::PositionAttitudeTransform *pat = dynamic_cast<osg::PositionAttitudeTransform *>(node))
-    {
-      double angle = 0.0;
-      osg::Vec3 axis;
-      pat->getAttitude().getRotate(angle, axis);
+  osg::ref_ptr<osg::MatrixTransform> mt = new osg::MatrixTransform;
+  mt->setMatrix(osg::Matrix::rotate(rotateZ, osg::Z_AXIS) * osg::Matrix::translate(posX, 0.0, 0.0));
+  mt->addChild(model);
+  return mt.release();
+}
 
-      cout << "Node is rotating around the (" << axis << ")axis, "
-        << osg::RadiansToDegrees(angle) << " degrees" << endl;
-    }
-    traverse(node, nv);
-  }
-};
+// 延Z轴顺时针旋转45度
+osg::Transform* createPositionAttitudeTransform(double posX, double rotateZ, osg::Node *model)
+{
+  osg::ref_ptr<osg::PositionAttitudeTransform> pat = new osg::PositionAttitudeTransform;
+  pat->setPosition(osg::Vec3(posX, 0.0, 0.0));
+  pat->setAttitude(osg::Quat(rotateZ, osg::Z_AXIS));
+  pat->addChild(model);
+  return pat.release();
+}
 
 int main(int argc, char** argv)
 {
   osg::ArgumentParser arguments(&argc, argv);
   osg::Node *model = osgDB::readNodeFiles(arguments);
-  if (!model) model = osgDB::readNodeFile("cow.osg");
+  if (!model) model = osgDB::readNodeFile("axes.osgt");
 
-  auto pat = new osg::PositionAttitudeTransform;
-  pat->addChild(model);
-
-  pat->setUpdateCallback(new RotateCallback);
-  pat->addUpdateCallback(new InfoCallback);
+  osg::ref_ptr<osg::Group> root = new osg::Group;
+  root->addChild(createMatrixTransform(-5.0, osg::PI/4, model));
+  root->addChild(createAutoTransform(0.0, model));
+  root->addChild(createPositionAttitudeTransform(5.0, -osg::PI/4, model));
 
   osgViewer::Viewer viewer;
-  viewer.setSceneData(pat);
+  viewer.setSceneData(root.get());
   return viewer.run();
 }

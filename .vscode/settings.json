@@ -10,6 +10,7 @@
     "quat": "cpp",
     "positionattitudetransform": "cpp",
     "group": "cpp",
-    "transform": "cpp"
+    "transform": "cpp",
+    "ref_ptr": "cpp"
   }
 }
