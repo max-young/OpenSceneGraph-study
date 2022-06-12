@@ -1,94 +1,42 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/Texture2D>
-#include <osg/Geometry>
-#include <osg/Geode>
+#include <osg/Fog>
+#include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
 
-// 手动设置mipmap
-osg::Image* createCustomMipmap(unsigned int resolution)
+class FogCallback : public osg::StateSet::Callback
 {
-  unsigned int totalSize = 0;
-  unsigned int res = resolution;
-  osg::Image::MipmapDataType mipmapData;
-  for (unsigned int i = 0; res>0;res>>=1, ++i)
+public:
+  virtual void operator()(osg::StateSet *ss, osg::NodeVisitor *nv)
   {
-    if (i > 0) mipmapData.push_back(totalSize);
-    totalSize += res*res*4;
-  }
-  osg::ref_ptr<osg::Image> image = new osg::Image;
-  image->setImage(resolution, resolution, 1, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, new unsigned char[totalSize], osg::Image::USE_NEW_DELETE);
-  image->setMipmapLevels(mipmapData);
+    if (!ss) return;
 
-  unsigned char* ptr = image->data();
-  res = resolution;
-  for (unsigned int i = 0; res > 0; res>>=1, ++i)
-  {
-    for (unsigned int s = 0; s < res;++s)
+    osg::Fog *fog = dynamic_cast<osg::Fog*>(ss->getAttribute(osg::StateAttribute::FOG));
+    if (fog)
     {
-      for (unsigned int t = 0; t < res; ++t)
-      {
-        unsigned char color = (((s&0x4)==0)^((t&0x4)==0))*255;
-        *ptr++=color;*ptr++=color;*ptr++=color;*ptr++=255;
-      }
+      float start = fog->getStart();
+      if (start < fog->getEnd() - 5.0) fog->setStart(start + 5.0);
     }
   }
-  return image.release();
-}
-
-osg::Image* createInternalMipmap(unsigned int resolution)
-{
-  unsigned int totalSize = resolution*resolution*4;
-
-  osg::ref_ptr<osg::Image> image = new osg::Image;
-  image->setImage(resolution, resolution, 1, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, new unsigned char[totalSize], osg::Image::USE_NEW_DELETE);
-
-  unsigned char* ptr = image->data();
-  for (unsigned int s = 0; s < resolution; ++s)
-  {
-    for (unsigned int  t = 0; t < resolution; ++t)
-    {
-      unsigned char color = (((s&0x4)==0)^((t&0x4)==0))*255;
-      *ptr++=color;*ptr++=color;*ptr++=color;*ptr++=255;
-    }
-  }
-  return image.release();
-}
-
-void createTexture2D(osg::StateSet &ss, bool useCustomizeData)
-{
-  osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
-  if(useCustomizeData) texture->setImage(createCustomMipmap(32));
-  else texture->setImage(createInternalMipmap(32));
-
-  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR_MIPMAP_LINEAR);
-  texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
-  texture->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
-  texture->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
-  ss.setTextureAttributeAndModes(0, texture.get());
-}
+};
 
 int main(int argc, char** argv)
 {
-  osg::ref_ptr<osg::Geode> quad1 = new osg::Geode;
-  quad1->addDrawable(osg::createTexturedQuadGeometry(
-    osg::Vec3(0.0, 0.0, 0.0), osg::Vec3(1.0, 0.0, 0.0),
-    osg::Vec3(0.0, 0.0, 1.0)
-  ));
-  createTexture2D(*(quad1->getOrCreateStateSet()), true);
+  osg::ArgumentParser arguments(&argc, argv);
+  osg::Node *model = osgDB::readNodeFiles(arguments);
+  if (!model) model = osgDB::readNodeFile("lz.osg");
 
-  osg::ref_ptr<osg::Geode> quad2 = new osg::Geode;
-  quad2->addDrawable(osg::createTexturedQuadGeometry(
-    osg::Vec3(2.0, 0.0, 0.0), osg::Vec3(1.0, 0.0, 0.0),
-    osg::Vec3(0.0, 0.0, 1.0)
-  ));
-  createTexture2D(*(quad2->getOrCreateStateSet()), false);
+  osg::ref_ptr<osg::Fog> fog = new osg::Fog;
+  fog->setMode(osg::Fog::LINEAR);
+  fog->setColor(osg::Vec4(1.0, 1.0, 1.0, 1.0));
+  fog->setStart(1.0);
+  fog->setEnd(2000.0);
 
-  osg::ref_ptr<osg::Group> root = new osg::Group;
-  root->addChild(quad1.get());
-  root->addChild(quad2.get());
+  osg::StateSet *ss = model->getOrCreateStateSet();
+  ss->setAttributeAndModes(fog.get());
+  ss->setUpdateCallback(new FogCallback);
 
   osgViewer::Viewer viewer;
-  viewer.setSceneData(root.get());
+  viewer.setSceneData(model);
   return viewer.run();
 }

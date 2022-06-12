@@ -22,6 +22,7 @@
     "operationthread": "cpp",
     "stateset": "cpp",
     "trianglefunctor": "cpp",
-    "light": "cpp"
+    "light": "cpp",
+    "fog": "cpp"
   }
 }
