@@ -1,39 +1,20 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/Switch>
+#include <osg/LOD>
 #include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
 
-class CessnaCallback: public osg::NodeCallback
-{
-public:
-  static const int _fireStartFrame = 120;
-
-  virtual void operator()(osg::Node *node, osg::NodeVisitor *nv)
-  {
-    osg::Switch* cessnaSwitch = dynamic_cast<osg::Switch*>(node);
-    if (cessnaSwitch && nv)
-    {
-      const osg::FrameStamp *frameStamp = nv->getFrameStamp();
-      if (frameStamp)
-      {
-        if (_fireStartFrame < frameStamp->getFrameNumber())
-        {
-          cessnaSwitch->setValue(0, false);
-          cessnaSwitch->setValue(1, true);
-        }
-      }
-    }
-    traverse(node, nv);
-  }
-};
-
 int main(int argc, char** argv)
 {
-  osg::ref_ptr<osg::Switch> root = new osg::Switch;
-  root->addChild(osgDB::readNodeFile("cessna.osg"), true);
-  root->addChild(osgDB::readNodeFile("cessnafire.osg"), false);
-  root->setUpdateCallback(new CessnaCallback);
+  // exmpale data里没有bunny文件, 可以用其它文件代替
+  // 另外, 我不知道怎么移动摄像机来改变距离
+  osg::Node *model = osgDB::readNodeFile("bunny-high.ive");
+  float r = model->getBound().radius();
+
+  osg::ref_ptr<osg::LOD> root = new osg::LOD;
+  root->addChild(osgDB::readNodeFile("bunny-low.ive"), r*7, FLT_MAX);
+  root->addChild(osgDB::readNodeFile("bunny-mid.ive"), r*3, r*7);
+  root->addChild(model, 0.0, r*3);
 
   osgViewer::Viewer viewer;
   viewer.setSceneData(root.get());
