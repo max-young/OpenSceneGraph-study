@@ -1,90 +1,92 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/Texture1D>
 #include <osg/Texture2D>
-#include <osg/TextureCubeMap>
-#include <osg/TexGen>
-#include <osg/ShapeDrawable>
+#include <osg/Geometry>
 #include <osg/Geode>
-#include <osg/PositionAttitudeTransform>
-#include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
 
-void createTexture1D(osg::StateSet &ss)
+// 手动设置mipmap
+osg::Image* createCustomMipmap(unsigned int resolution)
 {
-  osg::ref_ptr<osg::Image> image = new osg::Image;
-  image->setImage(256, 1, 1, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, new unsigned char[4 * 256], osg::Image::USE_NEW_DELETE);
-  unsigned char *ptr = image->data();
-  for (unsigned int i = 0; i < 256; ++i)
+  unsigned int totalSize = 0;
+  unsigned int res = resolution;
+  osg::Image::MipmapDataType mipmapData;
+  for (unsigned int i = 0; res>0;res>>=1, ++i)
   {
-    *ptr++ = i;
-    *ptr++ = i;
-    *ptr++ = 255;
-    *ptr++ = 255;
+    if (i > 0) mipmapData.push_back(totalSize);
+    totalSize += res*res*4;
   }
+  osg::ref_ptr<osg::Image> image = new osg::Image;
+  image->setImage(resolution, resolution, 1, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, new unsigned char[totalSize], osg::Image::USE_NEW_DELETE);
+  image->setMipmapLevels(mipmapData);
 
-  osg::ref_ptr<osg::Texture1D> texture = new osg::Texture1D;
-  texture->setImage(image.get());
-  texture->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
-  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
-  ss.setTextureAttributeAndModes(0, texture.get());
+  unsigned char* ptr = image->data();
+  res = resolution;
+  for (unsigned int i = 0; res > 0; res>>=1, ++i)
+  {
+    for (unsigned int s = 0; s < res;++s)
+    {
+      for (unsigned int t = 0; t < res; ++t)
+      {
+        unsigned char color = (((s&0x4)==0)^((t&0x4)==0))*255;
+        *ptr++=color;*ptr++=color;*ptr++=color;*ptr++=255;
+      }
+    }
+  }
+  return image.release();
 }
 
-void createTexture2D(osg::StateSet &ss)
+osg::Image* createInternalMipmap(unsigned int resolution)
+{
+  unsigned int totalSize = resolution*resolution*4;
+
+  osg::ref_ptr<osg::Image> image = new osg::Image;
+  image->setImage(resolution, resolution, 1, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, new unsigned char[totalSize], osg::Image::USE_NEW_DELETE);
+
+  unsigned char* ptr = image->data();
+  for (unsigned int s = 0; s < resolution; ++s)
+  {
+    for (unsigned int  t = 0; t < resolution; ++t)
+    {
+      unsigned char color = (((s&0x4)==0)^((t&0x4)==0))*255;
+      *ptr++=color;*ptr++=color;*ptr++=color;*ptr++=255;
+    }
+  }
+  return image.release();
+}
+
+void createTexture2D(osg::StateSet &ss, bool useCustomizeData)
 {
   osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
-  texture->setImage(osgDB::readImageFile("Images/clockface.jpg"));
-  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+  if(useCustomizeData) texture->setImage(createCustomMipmap(32));
+  else texture->setImage(createInternalMipmap(32));
+
+  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR_MIPMAP_LINEAR);
   texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
-  texture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_BORDER);
-  texture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_BORDER);
-  texture->setBorderColor(osg::Vec4(1.0, 1.0, 0.0, 1.0));
+  texture->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
+  texture->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
   ss.setTextureAttributeAndModes(0, texture.get());
 }
 
-void createTextureCubeMap(osg::StateSet &ss)
-{
-  osg::ref_ptr<osg::TextureCubeMap> texture = new osg::TextureCubeMap;
-  texture->setImage(osg::TextureCubeMap::POSITIVE_X, osgDB::readImageFile("Cubemap_axis/posx.png"));
-  texture->setImage(osg::TextureCubeMap::NEGATIVE_X, osgDB::readImageFile("Cubemap_axis/negx.png"));
-  texture->setImage(osg::TextureCubeMap::POSITIVE_Y, osgDB::readImageFile("Cubemap_axis/posy.png"));
-  texture->setImage(osg::TextureCubeMap::NEGATIVE_Y, osgDB::readImageFile("Cubemap_axis/negy.png"));
-  texture->setImage(osg::TextureCubeMap::POSITIVE_Z, osgDB::readImageFile("Cubemap_axis/posz.png"));
-  texture->setImage(osg::TextureCubeMap::NEGATIVE_Z, osgDB::readImageFile("Cubemap_axis/negz.png"));
-
-  texture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
-  texture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
-  texture->setWrap(osg::Texture::WRAP_R, osg::Texture::CLAMP_TO_EDGE);
-
-  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
-  texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
-
-  ss.setTextureAttributeAndModes(0, texture.get());
-  ss.setTextureAttributeAndModes(0, new osg::TexGen);
-}
-
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
   osg::ref_ptr<osg::Geode> quad1 = new osg::Geode;
   quad1->addDrawable(osg::createTexturedQuadGeometry(
-      osg::Vec3(-3.0, 0.0, -0.5), osg::Vec3(1.0, 0.0, 0.0),
-      osg::Vec3(0.0, 0.0, 1.0), 0.0, 0.0, 3.0, 1.0));
-  createTexture1D(*(quad1->getOrCreateStateSet()));
+    osg::Vec3(0.0, 0.0, 0.0), osg::Vec3(1.0, 0.0, 0.0),
+    osg::Vec3(0.0, 0.0, 1.0)
+  ));
+  createTexture2D(*(quad1->getOrCreateStateSet()), true);
 
   osg::ref_ptr<osg::Geode> quad2 = new osg::Geode;
   quad2->addDrawable(osg::createTexturedQuadGeometry(
-      osg::Vec3(-0.5, 0.0, -0.5), osg::Vec3(1.0, 0.0, 0.0),
-      osg::Vec3(0.0, 0.0, 1.0), -0.1, -0.1, 1.1, 1.1));
-  createTexture2D(*(quad2->getOrCreateStateSet()));
-
-  osg::ref_ptr<osg::Geode> box = new osg::Geode;
-  box->addDrawable(new osg::ShapeDrawable(new osg::Sphere(osg::Vec3(3.0, 0.0, 0.0), 1.0)));
-  createTextureCubeMap(*(box->getOrCreateStateSet()));
+    osg::Vec3(2.0, 0.0, 0.0), osg::Vec3(1.0, 0.0, 0.0),
+    osg::Vec3(0.0, 0.0, 1.0)
+  ));
+  createTexture2D(*(quad2->getOrCreateStateSet()), false);
 
   osg::ref_ptr<osg::Group> root = new osg::Group;
   root->addChild(quad1.get());
   root->addChild(quad2.get());
-  root->addChild(box.get());
 
   osgViewer::Viewer viewer;
   viewer.setSceneData(root.get());
