@@ -1,89 +1,31 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/io_utils>
-#include <osg/TriangleFunctor>
-#include <osg/Drawable>
+#include <osg/DrawPixels>
+#include <osg/Geode>
 #include <osgDB/ReadFile>
-#include <iostream>
-#include <string>
+#include <osgViewer/Viewer>
 
-using std::string;
-using std::cout;
-using std::endl;
+int main(int argc, char** argv) {
+  osg::ref_ptr<osg::DrawPixels> bitmap1 = new osg::DrawPixels;
+  bitmap1->setPosition(osg::Vec3(0.0, 0.0, 0.0));
+  bitmap1->setImage(osgDB::readImageFile("Images/osg64.png"));
 
-class AttributePrinter: public osg::Drawable::AttributeFunctor
-{
-public:
-  using AttributeType = osg::Drawable::AttributeType;
-  inline const string getTypeName(AttributeType type)
-  {
-    static const string typeNames[] = {
-      "Vertices", "Weights", "Normals", "colors", "Secondary Colors",
-      "Fog Coordinates", "Attribute6", "Attribute7",
-      "Texture Coords 0", "Texture Coords 1", "Texture Coords 2",
-      "Texture Coords 3", "Texture Coords 4", "Texture Coords 5",
-      "Texture Coords 6", "Texture Coords 7"
-    };
-    return typeNames[type];
-  }
+  osg::ref_ptr<osg::DrawPixels> bitmap2 = new osg::DrawPixels;
+  bitmap2->setPosition(osg::Vec3(80.0, 0.0, 0.0));
+  bitmap2->setImage(osgDB::readImageFile("Images/osg128.png"));
 
-  template<typename T>
-  void printInfo(AttributeType type, unsigned int size, T* front)
-  {
-    cout << "***" << getTypeName(type) << ": " << size << endl;
-    for (unsigned int i = 0; i < size; ++i)
-      cout << "(" << *(front+i) << ")";
-    cout << endl << endl;
-  }
+  osg::ref_ptr<osg::DrawPixels> bitmap3 = new osg::DrawPixels;
+  bitmap3->setPosition(osg::Vec3(200.0, 0.0, 0.0));
+  bitmap3->setImage(osgDB::readImageFile("Images/osg256.png"));
+  bitmap3->setSubImageDimensions(64, 64, 128, 128);
+  bitmap3->setUseSubImage(true);
 
-  virtual void apply(AttributeType type, unsigned int size, float *front) {printInfo(type, size, front);}
-  virtual void apply(AttributeType type, unsigned int size, osg::Vec2 *front) {printInfo(type, size, front);}
-  virtual void apply(AttributeType type, unsigned int size, osg::Vec3 *front) {printInfo(type, size, front);}
-  virtual void apply(AttributeType type, unsigned int size, osg::Vec4 *front) {printInfo(type, size, front);}
-};
+  osg::ref_ptr<osg::Geode> geode = new osg::Geode;
+  geode->addDrawable(bitmap1.get());
+  geode->addDrawable(bitmap2.get());
+  geode->addDrawable(bitmap3.get());
 
-struct TrianglePrinter
-{
-  TrianglePrinter(){cout << "***Triangles***" << endl;}
-
-  void operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3) const
-  {cout << "(" << v1 << ");(" << v2 << ");(" << v3 << ")" << endl;}
-};
-
-class FindGeometryVisitor: public osg::NodeVisitor
-{
-public:
-  FindGeometryVisitor(): osg::NodeVisitor(TRAVERSE_ALL_CHILDREN) {}
-    
-  virtual void apply(osg::Node &node){traverse(node);}
-
-  virtual void apply(osg::Geode &node)
-  {
-    for(unsigned int i = 0; i < node.getNumDrawables(); ++i)
-    {
-      osg::Drawable *drawable = node.getDrawable(i);
-      if (!drawable) continue;
-      cout << "[" << drawable->libraryName() << "::" << drawable->className() << "]" << endl;
-
-      AttributePrinter attrPrinter;
-      drawable->accept(attrPrinter);
-
-      osg::TriangleFunctor<TrianglePrinter> triPrinter;
-      drawable->accept(triPrinter);
-
-      cout << endl;
-    }
-    traverse(node);
-  }
-};
-
-int main(int argc, char** argv)
-{
-  osg::ArgumentParser arguments(&argc, argv);
-  osg::Node *model = osgDB::readNodeFiles(arguments);
-  if(!model) osgDB::readNodeFile("house.ive");
-
-  FindGeometryVisitor fgv;
-  if(model) model->accept(fgv);
-  return 0;
+  osgViewer::Viewer viewer;
+  viewer.setSceneData(geode.get());
+  return viewer.run();
 }
