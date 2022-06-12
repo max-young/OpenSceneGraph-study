@@ -1,62 +1,92 @@
 #define GL_SILENCE_DEPRECATION
 
+#include <osg/Texture1D>
+#include <osg/Texture2D>
+#include <osg/TextureCubeMap>
+#include <osg/TexGen>
+#include <osg/ShapeDrawable>
 #include <osg/Geode>
-#include <osg/Geometry>
-#include <osgText/Text>
+#include <osg/PositionAttitudeTransform>
+#include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
-#include <locale.h>
-#include <string>
 
-using std::string;
-
-void setupProperties(osgText::Text &textObject, osgText::Font *font, float size, const osg::Vec3 &pos)
+void createTexture1D(osg::StateSet &ss)
 {
-  textObject.setFont(font);
-  textObject.setCharacterSize(size);
-  textObject.setPosition(pos);
-  textObject.setColor(osg::Vec4(0.0, 0.0, 1.0, 1.0));
-  textObject.setAlignment(osgText::Text::CENTER_BOTTOM);
-  textObject.setAxisAlignment(osgText::Text::XZ_PLANE);
+  osg::ref_ptr<osg::Image> image = new osg::Image;
+  image->setImage(256, 1, 1, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, new unsigned char[4 * 256], osg::Image::USE_NEW_DELETE);
+  unsigned char *ptr = image->data();
+  for (unsigned int i = 0; i < 256; ++i)
+  {
+    *ptr++ = i;
+    *ptr++ = i;
+    *ptr++ = 255;
+    *ptr++ = 255;
+  }
+
+  osg::ref_ptr<osg::Texture1D> texture = new osg::Texture1D;
+  texture->setImage(image.get());
+  texture->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
+  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+  ss.setTextureAttributeAndModes(0, texture.get());
 }
 
-void createContent(osgText::Text &textObject, const string string)
+void createTexture2D(osg::StateSet &ss)
 {
-  int requiredSize = std::mbstowcs(NULL, string.c_str(), 0);
-  wchar_t *wtext = new wchar_t[requiredSize + 1];
-  std::mbstowcs(wtext, string.c_str(), requiredSize + 1);
-  textObject.setText(wtext);
-  delete[] wtext;
+  osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
+  texture->setImage(osgDB::readImageFile("Images/clockface.jpg"));
+  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+  texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
+  texture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_BORDER);
+  texture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_BORDER);
+  texture->setBorderColor(osg::Vec4(1.0, 1.0, 0.0, 1.0));
+  ss.setTextureAttributeAndModes(0, texture.get());
+}
+
+void createTextureCubeMap(osg::StateSet &ss)
+{
+  osg::ref_ptr<osg::TextureCubeMap> texture = new osg::TextureCubeMap;
+  texture->setImage(osg::TextureCubeMap::POSITIVE_X, osgDB::readImageFile("Cubemap_axis/posx.png"));
+  texture->setImage(osg::TextureCubeMap::NEGATIVE_X, osgDB::readImageFile("Cubemap_axis/negx.png"));
+  texture->setImage(osg::TextureCubeMap::POSITIVE_Y, osgDB::readImageFile("Cubemap_axis/posy.png"));
+  texture->setImage(osg::TextureCubeMap::NEGATIVE_Y, osgDB::readImageFile("Cubemap_axis/negy.png"));
+  texture->setImage(osg::TextureCubeMap::POSITIVE_Z, osgDB::readImageFile("Cubemap_axis/posz.png"));
+  texture->setImage(osg::TextureCubeMap::NEGATIVE_Z, osgDB::readImageFile("Cubemap_axis/negz.png"));
+
+  texture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+  texture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+  texture->setWrap(osg::Texture::WRAP_R, osg::Texture::CLAMP_TO_EDGE);
+
+  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+  texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
+
+  ss.setTextureAttributeAndModes(0, texture.get());
+  ss.setTextureAttributeAndModes(0, new osg::TexGen);
 }
 
 int main(int argc, char **argv)
 {
-  setlocale(LC_ALL, "zh_CN");
-  const char *titleString = "木兰辞\n拟古决绝词柬友";
-  const char *textString = {
-      "人生若只如初见, 何事秋风悲画扇; \n"
-      "等闲变却故人心, 却道故人心易变; \n"
-      "骊山语罢清宵半, 夜雨霖铃终不怨; \n"
-      "何如薄幸锦衣郎, 比翼连枝当日愿; \n"};
+  osg::ref_ptr<osg::Geode> quad1 = new osg::Geode;
+  quad1->addDrawable(osg::createTexturedQuadGeometry(
+      osg::Vec3(-3.0, 0.0, -0.5), osg::Vec3(1.0, 0.0, 0.0),
+      osg::Vec3(0.0, 0.0, 1.0), 0.0, 0.0, 3.0, 1.0));
+  createTexture1D(*(quad1->getOrCreateStateSet()));
 
-  osgText::Font *fontHei = osgText::readFontFile("fonts/arial.ttf");
-  osgText::Font *fontKai = osgText::readFontFile("fonts/times.ttf");
+  osg::ref_ptr<osg::Geode> quad2 = new osg::Geode;
+  quad2->addDrawable(osg::createTexturedQuadGeometry(
+      osg::Vec3(-0.5, 0.0, -0.5), osg::Vec3(1.0, 0.0, 0.0),
+      osg::Vec3(0.0, 0.0, 1.0), -0.1, -0.1, 1.1, 1.1));
+  createTexture2D(*(quad2->getOrCreateStateSet()));
 
-  osg::ref_ptr<osgText::Text> title = new osgText::Text;
-  setupProperties(*title, fontHei, 20.0f, osg::Vec3(0.0f, 0.0f, 0.0f));
-  createContent(*title, titleString);
+  osg::ref_ptr<osg::Geode> box = new osg::Geode;
+  box->addDrawable(new osg::ShapeDrawable(new osg::Sphere(osg::Vec3(3.0, 0.0, 0.0), 1.0)));
+  createTextureCubeMap(*(box->getOrCreateStateSet()));
 
-  osg::ref_ptr<osgText::Text> text = new osgText::Text;
-  setupProperties(*text, fontKai, 15.0f, osg::Vec3(0.0f, 0.0f, -80.0f));
-  createContent(*text, textString);
-
-  osg::ref_ptr<osg::Geode> geode = new osg::Geode;
-  geode->addDrawable(osg::createTexturedQuadGeometry(
-      osg::Vec3(-150.0, 1.0, -130.0), osg::Vec3(300.0, 0.0, 0.0),
-      osg::Vec3(0.0, 0.0, 200.0), 1.0, 1.0));
-  geode->addDrawable(title.get());
-  geode->addDrawable(text.get());
+  osg::ref_ptr<osg::Group> root = new osg::Group;
+  root->addChild(quad1.get());
+  root->addChild(quad2.get());
+  root->addChild(box.get());
 
   osgViewer::Viewer viewer;
-  viewer.setSceneData(geode.get());
+  viewer.setSceneData(root.get());
   return viewer.run();
 }
