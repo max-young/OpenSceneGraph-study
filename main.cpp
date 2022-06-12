@@ -1,40 +1,86 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/Fog>
+#include <osg/Program>
 #include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
 
-class FogCallback : public osg::StateSet::Callback
+static const char *vertSource = {
+    "varying vec3 normal;\n"
+    "void main()\n"
+    "{\n"
+    "   normal = normalize(gl_NormalMatrix * gl_Normal);\n"
+    "   gl_Position = ftransform();\n"
+    "}\n"};
+
+static const char *fragSource = {
+    "uniform vec4 mainColor;\n"
+    "varying vec3 normal;\n"
+    "void main()\n"
+    "{\n"
+    "   float intensity = dot(vec3(gl_LightSource[0].position), normal);\n"
+    "   if(intensity>0.95) gl_FragColor = mainColor;\n"
+    "   else if (intensity>0.5) gl_FragColor = vec4(0.6, 0.3, 0.3, 1.0);\n"
+    "   else if (intensity>0.25) gl_FragColor = vec4(0.4, 0.2, 0.2, 1.0);\n"
+    "   else gl_FragColor = vec4(0.2, 0.1, 0.1, 1.0);\n"
+    "}\n"};
+
+class ColorCallback : public osg::Uniform::Callback
 {
 public:
-  virtual void operator()(osg::StateSet *ss, osg::NodeVisitor *nv)
-  {
-    if (!ss) return;
+  ColorCallback() : _incRed(false) {}
 
-    osg::Fog *fog = dynamic_cast<osg::Fog*>(ss->getAttribute(osg::StateAttribute::FOG));
-    if (fog)
+  virtual void operator()(osg::Uniform *uniform, osg::NodeVisitor *nv)
+  {
+    if (!uniform)
+      return;
+
+    osg::Vec4 color;
+    uniform->get(color);
+
+    if (_incRed == true)
     {
-      float start = fog->getStart();
-      if (start < fog->getEnd() - 5.0) fog->setStart(start + 5.0);
+      if (color.x() < 1.0)
+        color.x() += 0.01;
+      else
+        _incRed = false;
     }
+    else
+    {
+      if (color.x() > 0.0)
+        color.x() -= 0.01;
+      else
+        _incRed = true;
+    }
+    uniform->set(color);
   }
+
+protected:
+  bool _incRed;
 };
 
-int main(int argc, char** argv)
+void createShader(osg::StateSet &ss)
+{
+  osg::ref_ptr<osg::Shader> vertShader = new osg::Shader(osg::Shader::VERTEX, vertSource);
+  osg::ref_ptr<osg::Shader> fragShader = new osg::Shader(osg::Shader::FRAGMENT, fragSource);
+
+  osg::ref_ptr<osg::Program> program = new osg::Program;
+  program->addShader(vertShader.get());
+  program->addShader(fragShader.get());
+
+  osg::ref_ptr<osg::Uniform> mainColor = new osg::Uniform("mainColor", osg::Vec4(1.0, 0.5, 0.5, 1.0));
+  mainColor->setUpdateCallback(new ColorCallback);
+
+  ss.addUniform(mainColor.get());
+  ss.setAttributeAndModes(program.get());
+}
+
+int main(int argc, char **argv)
 {
   osg::ArgumentParser arguments(&argc, argv);
   osg::Node *model = osgDB::readNodeFiles(arguments);
-  if (!model) model = osgDB::readNodeFile("lz.osg");
-
-  osg::ref_ptr<osg::Fog> fog = new osg::Fog;
-  fog->setMode(osg::Fog::LINEAR);
-  fog->setColor(osg::Vec4(1.0, 1.0, 1.0, 1.0));
-  fog->setStart(1.0);
-  fog->setEnd(2000.0);
-
-  osg::StateSet *ss = model->getOrCreateStateSet();
-  ss->setAttributeAndModes(fog.get());
-  ss->setUpdateCallback(new FogCallback);
+  if (!model)
+    model = osgDB::readNodeFile("cow.osg");
+  createShader(*(model->getOrCreateStateSet()));
 
   osgViewer::Viewer viewer;
   viewer.setSceneData(model);

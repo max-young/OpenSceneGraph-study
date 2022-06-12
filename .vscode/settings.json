@@ -23,6 +23,7 @@
     "stateset": "cpp",
     "trianglefunctor": "cpp",
     "light": "cpp",
-    "fog": "cpp"
+    "fog": "cpp",
+    "dynamiclibrary": "cpp"
   }
 }
