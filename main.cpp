@@ -2,44 +2,26 @@
 
 #include <osg/Group>
 #include <osgDB/ReadFile>
+#include <osgViewer/CompositeViewer>
 #include <osgViewer/Viewer>
-
-osg::Camera *createCamera(int x, int y, int w, int h)
-{
-  osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits;
-  traits->windowDecoration = false;
-  traits->x = x;
-  traits->y = y;
-  traits->width = w;
-  traits->height = h;
-  traits->doubleBuffer = true;
-
-  osg::DisplaySettings *ds = osg::DisplaySettings::instance();
-  traits->alpha = ds->getMinimumNumAlphaBits();
-  traits->stencil = ds->getMinimumNumStencilBits();
-  traits->sampleBuffers = ds->getMultiSamples();
-  traits->samples = ds->getNumMultiSamples();
-
-  osg::ref_ptr<osg::GraphicsContext> gc = osg::GraphicsContext::createGraphicsContext(traits.get());
-
-  osg::ref_ptr<osg::Camera> camera = new osg::Camera;
-  camera->setGraphicsContext(gc.get());
-  camera->setViewport(new osg::Viewport(0, 0, w, h));
-  return camera.release();
-}
 
 int main(int argc, char **argv)
 {
-  osg::ArgumentParser arguments(&argc, argv);
-  osg::Node *model = osgDB::readNodeFiles(arguments);
-  if (!model)
-    model = osgDB::readNodeFile("cow.osg");
+  osg::ref_ptr<osgViewer::Viewer> view1 = new osgViewer::Viewer;
+  view1->setUpViewInWindow(0, 50, 320, 240);
+  view1->setSceneData(osgDB::readNodeFile("cow.osg"));
 
-  osgViewer::Viewer viewer;
-  viewer.addSlave(createCamera(100, 100, 400, 300), osg::Matrixd::translate(1.0, -1.0, 0.0), osg::Matrixd());
-  viewer.addSlave(createCamera(505, 100, 400, 300), osg::Matrixd::translate(-1.0, -1.0, 0.0), osg::Matrixd());
-  viewer.addSlave(createCamera(100, 405, 400, 300), osg::Matrixd::translate(1.0, 1.0, 0.0), osg::Matrixd());
-  viewer.addSlave(createCamera(505, 405, 400, 300), osg::Matrixd::translate(-1.0, 1.0, 0.0), osg::Matrixd());
-  viewer.setSceneData(model);
-  return viewer.run();
+  osg::ref_ptr<osgViewer::Viewer> view2 = new osgViewer::Viewer;
+  view2->setUpViewInWindow(320, 50, 320, 240);
+  view2->setSceneData(osgDB::readNodeFile("cessna.osg"));
+
+  osg::ref_ptr<osgViewer::Viewer> view3 = new osgViewer::Viewer;
+  view3->setUpViewInWindow(640, 50, 320, 240);
+  view3->setSceneData(osgDB::readNodeFile("axes.osgt"));
+
+  osgViewer::CompositeViewer compositeViewer;
+  compositeViewer.addView(view1.get());
+  compositeViewer.addView(view2.get());
+  compositeViewer.addView(view3.get());
+  return compositeViewer.run();
 }
