@@ -1,77 +1,29 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/Program>
+#include <osg/Camera>
 #include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
 
-static const char *vertSource = {
-    "varying vec3 normal;\n"
-    "void main()\n"
-    "{\n"
-    "   normal = normalize(gl_NormalMatrix * gl_Normal);\n"
-    "   gl_Position = ftransform();\n"
-    "}\n"};
-
-static const char *fragSource = {
-    "uniform vec4 mainColor;\n"
-    "varying vec3 normal;\n"
-    "void main()\n"
-    "{\n"
-    "   float intensity = dot(vec3(gl_LightSource[0].position), normal);\n"
-    "   if(intensity>0.95) gl_FragColor = mainColor;\n"
-    "   else if (intensity>0.5) gl_FragColor = vec4(0.6, 0.3, 0.3, 1.0);\n"
-    "   else if (intensity>0.25) gl_FragColor = vec4(0.4, 0.2, 0.2, 1.0);\n"
-    "   else gl_FragColor = vec4(0.2, 0.1, 0.1, 1.0);\n"
-    "}\n"};
-
-class ColorCallback : public osg::Uniform::Callback
+osg::Camera *createBirdsEye(const osg::BoundingSphere &bs)
 {
-public:
-  ColorCallback() : _incRed(false) {}
+  osg::ref_ptr<osg::Camera> camera = new osg::Camera;
+  camera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  camera->setReferenceFrame(osg::Transform::ABSOLUTE_RF);
 
-  virtual void operator()(osg::Uniform *uniform, osg::NodeVisitor *nv)
-  {
-    if (!uniform)
-      return;
+  double viewDistance = bs.radius() * 2.0;
+  double znear = viewDistance - bs.radius();
+  double zfar = viewDistance + bs.radius();
+  float top = bs.radius();
+  float right = bs.radius();
+  camera->setProjectionMatrixAsOrtho(-right, right, -top, top, znear, zfar);
 
-    osg::Vec4 color;
-    uniform->get(color);
+  osg::Vec3d upDirection(0.0, 1.0, 0.0);
+  osg::Vec3d viewDirection(0.0, 0.0, 1.0);
+  osg::Vec3d center = bs.center();
+  osg::Vec3d eyePoint = center + viewDirection * viewDistance;
+  camera->setViewMatrixAsLookAt(eyePoint, center, upDirection);
 
-    if (_incRed == true)
-    {
-      if (color.x() < 1.0)
-        color.x() += 0.01;
-      else
-        _incRed = false;
-    }
-    else
-    {
-      if (color.x() > 0.0)
-        color.x() -= 0.01;
-      else
-        _incRed = true;
-    }
-    uniform->set(color);
-  }
-
-protected:
-  bool _incRed;
-};
-
-void createShader(osg::StateSet &ss)
-{
-  osg::ref_ptr<osg::Shader> vertShader = new osg::Shader(osg::Shader::VERTEX, vertSource);
-  osg::ref_ptr<osg::Shader> fragShader = new osg::Shader(osg::Shader::FRAGMENT, fragSource);
-
-  osg::ref_ptr<osg::Program> program = new osg::Program;
-  program->addShader(vertShader.get());
-  program->addShader(fragShader.get());
-
-  osg::ref_ptr<osg::Uniform> mainColor = new osg::Uniform("mainColor", osg::Vec4(1.0, 0.5, 0.5, 1.0));
-  mainColor->setUpdateCallback(new ColorCallback);
-
-  ss.addUniform(mainColor.get());
-  ss.setAttributeAndModes(program.get());
+  return camera.release();
 }
 
 int main(int argc, char **argv)
@@ -79,10 +31,12 @@ int main(int argc, char **argv)
   osg::ArgumentParser arguments(&argc, argv);
   osg::Node *model = osgDB::readNodeFiles(arguments);
   if (!model)
-    model = osgDB::readNodeFile("cow.osg");
-  createShader(*(model->getOrCreateStateSet()));
+    model = osgDB::readNodeFile("lz.osg");
+
+  osg::Camera *camera = createBirdsEye(model->getBound());
+  camera->addChild(model);
 
   osgViewer::Viewer viewer;
-  viewer.setSceneData(model);
+  viewer.setSceneData(camera);
   return viewer.run();
 }
