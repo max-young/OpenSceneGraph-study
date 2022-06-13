@@ -1,62 +1,104 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/Switch>
+#include <osgManipulator/CommandManager>
+#include <osgManipulator/TranslateAxisDragger>
 #include <osgDB/ReadFile>
-#include <osgGA/GUIEventHandler>
 #include <osgViewer/Viewer>
 
-class KeyboardHandler : public osgGA::GUIEventHandler
+class PickModelHandler : public osgGA::GUIEventHandler
 {
 public:
-  virtual bool handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionAdapter &aa, osg::Object *, osg::NodeVisitor *)
+  PickModelHandler() : _activeDragger(0) {}
+
+  bool handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionAdapter &aa, osg::Object *, osg::NodeVisitor *)
   {
-    osgViewer::Viewer *viewer = dynamic_cast<osgViewer::Viewer *>(&aa);
-    if (!viewer)
+    osgViewer::View *view = dynamic_cast<osgViewer::View *>(&aa);
+    if (!view)
       return false;
 
     switch (ea.getEventType())
     {
-    case osgGA::GUIEventAdapter::KEYDOWN:
-      if (ea.getKey() == osgGA::GUIEventAdapter::KEY_Space)
+    case osgGA::GUIEventAdapter::PUSH:
+    {
+      _pointer.reset();
+      osgUtil::LineSegmentIntersector::Intersections hits;
+      if (view->computeIntersections(ea.getX(), ea.getY(), hits))
       {
-        int width = ea.getWindowWidth();
-        int height = ea.getWindowHeight();
-        viewer->requestWarpPointer(width * 0.5, height * 0.5);
-      }
-      else
-      {
-        osg::Switch *root = dynamic_cast<osg::Switch *>(viewer->getSceneData());
-        if (!root)
-          return false;
+        _pointer.setCamera(view->getCamera());
+        _pointer.setMousePosition(ea.getX(), ea.getY());
 
-        if (ea.getKey() == '1')
+        for (osgUtil::LineSegmentIntersector::Intersections::iterator hitr = hits.begin(); hitr != hits.end(); ++hitr)
         {
-          root->setValue(0, true);
-          root->setValue(1, false);
+          _pointer.addIntersection(hitr->nodePath, hitr->getLocalIntersectPoint());
         }
-        else if (ea.getKey() == '2')
+
+        for (osg::NodePath::iterator itr = _pointer._hitList.front().first.begin(); itr != _pointer._hitList.front().first.end(); ++itr)
         {
-          root->setValue(0, false);
-          root->setValue(1, true);
+          osgManipulator::Dragger *dragger = dynamic_cast<osgManipulator::Dragger *>(*itr);
+          if (dragger)
+          {
+            dragger->handle(_pointer, ea, aa);
+            _activeDragger = dragger;
+            break;
+          }
         }
-        return true;
       }
       break;
+    }
+
+    case osgGA::GUIEventAdapter::DRAG:
+    case osgGA::GUIEventAdapter::RELEASE:
+    {
+      if (_activeDragger)
+      {
+        _pointer._hitIter = _pointer._hitList.begin();
+        _pointer.setCamera(view->getCamera());
+        _pointer.setMousePosition(ea.getX(), ea.getY());
+        _activeDragger->handle(_pointer, ea, aa);
+      }
+      if (ea.getEventType() == osgGA::GUIEventAdapter::RELEASE)
+      {
+        _activeDragger = NULL;
+        _pointer.reset();
+      }
+      break;
+    }
     default:
       break;
     }
-    return false;
+    return true;
   }
+
+protected:
+  osgManipulator::Dragger *_activeDragger;
+  osgManipulator::PointerInfo _pointer;
 };
 
 int main(int argc, char **argv)
 {
-  osg::ref_ptr<osg::Switch> root = new osg::Switch;
-  root->addChild(osgDB::readNodeFile("cessna.osg"), true);
-  root->addChild(osgDB::readNodeFile("cessnafire.osg"), false);
+  osg::ArgumentParser arguments(&argc, argv);
+  osg::Node *model = osgDB::readNodeFiles(arguments);
+  if (!model)
+    model = osgDB::readNodeFile("cow.osg");
+
+  osg::ref_ptr<osgManipulator::Selection> selection = new osgManipulator::Selection;
+  selection->addChild(model);
+
+  float scale = model->getBound().radius() * 1.6;
+  osg::ref_ptr<osgManipulator::TranslateAxisDragger> dragger = new osgManipulator::TranslateAxisDragger;
+  dragger->setupDefaultGeometry();
+  dragger->setMatrix(osg::Matrix::scale(scale, scale, scale) * osg::Matrix::translate(model->getBound().center()));
+
+  osg::ref_ptr<osg::Group> root = new osg::Group;
+  root->addChild(dragger.get());
+  root->addChild(selection.get());
+  root->addChild(osgDB::readNodeFile("axes.osgt"));
+
+  osg::ref_ptr<osgManipulator::CommandManager> manager = new osgManipulator::CommandManager;
+  manager->connect(*dragger, *selection);
 
   osgViewer::Viewer viewer;
+  viewer.addEventHandler(new PickModelHandler);
   viewer.setSceneData(root.get());
-  viewer.addEventHandler(new KeyboardHandler);
   return viewer.run();
 }

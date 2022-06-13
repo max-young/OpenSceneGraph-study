@@ -24,6 +24,10 @@
     "trianglefunctor": "cpp",
     "light": "cpp",
     "fog": "cpp",
-    "dynamiclibrary": "cpp"
+    "dynamiclibrary": "cpp",
+    "linesegmentintersector": "cpp",
+    "dragger": "cpp",
+    "guieventadapter": "cpp",
+    "graphicswindow": "cpp"
   }
 }
