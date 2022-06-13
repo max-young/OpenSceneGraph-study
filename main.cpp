@@ -1,44 +1,31 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <osg/Camera>
-#include <osg/Texture2D>
+#include <osg/Group>
 #include <osgDB/ReadFile>
 #include <osgViewer/Viewer>
 
-osg::Texture *createRttTexture(int texWidth, int texHeight)
+osg::Camera *createCamera(int x, int y, int w, int h)
 {
-  osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D;
-  texture->setInternalFormat(GL_RGBA);
-  texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
-  texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
+  osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits;
+  traits->windowDecoration = false;
+  traits->x = x;
+  traits->y = y;
+  traits->width = w;
+  traits->height = h;
+  traits->doubleBuffer = true;
 
-  texture->setTextureSize(texWidth, texHeight);
-  return texture.release();
-}
+  osg::DisplaySettings *ds = osg::DisplaySettings::instance();
+  traits->alpha = ds->getMinimumNumAlphaBits();
+  traits->stencil = ds->getMinimumNumStencilBits();
+  traits->sampleBuffers = ds->getMultiSamples();
+  traits->samples = ds->getNumMultiSamples();
 
-osg::Camera *createRttCamera(int texWidth, int texHeight, const osg::BoundingSphere &bs)
-{
-  osg::ref_ptr<osg::Camera> rttCamera = new osg::Camera;
-  rttCamera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  rttCamera->setReferenceFrame(osg::Transform::ABSOLUTE_RF);
-  rttCamera->setViewport(0, 0, texWidth, texHeight);
-  rttCamera->setRenderOrder(osg::Camera::PRE_RENDER);
-  rttCamera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT);
+  osg::ref_ptr<osg::GraphicsContext> gc = osg::GraphicsContext::createGraphicsContext(traits.get());
 
-  double viewDistance = 2.0 * bs.radius();
-  double znear = viewDistance - bs.radius();
-  double zfar = viewDistance + bs.radius();
-  float top = 0.6 * znear;
-  float right = 0.8 * znear;
-  rttCamera->setProjectionMatrixAsFrustum(-right, right, -top, top, znear, zfar);
-
-  osg::Vec3d upDirection(0.0, 0.0, 1.0);
-  osg::Vec3d viewDirection(0.0, -1.0, 0.0);
-  osg::Vec3d center = bs.center();
-  osg::Vec3d eyePoint = center + viewDirection * viewDistance;
-  rttCamera->setViewMatrixAsLookAt(eyePoint, center, upDirection);
-
-  return rttCamera.release();
+  osg::ref_ptr<osg::Camera> camera = new osg::Camera;
+  camera->setGraphicsContext(gc.get());
+  camera->setViewport(new osg::Viewport(0, 0, w, h));
+  return camera.release();
 }
 
 int main(int argc, char **argv)
@@ -46,25 +33,13 @@ int main(int argc, char **argv)
   osg::ArgumentParser arguments(&argc, argv);
   osg::Node *model = osgDB::readNodeFiles(arguments);
   if (!model)
-    model = osgDB::readNodeFile("axes.osgt");
-  model->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-
-  osg::ref_ptr<osg::Geode> quad = new osg::Geode;
-  quad->addDrawable(osg::createTexturedQuadGeometry(osg::Vec3(0.0, 0.0, 0.0), osg::Vec3(1.0, 0.0, 0.0), osg::Vec3(0.0, 0.0, 1.0)));
-
-  int texWidth = 512, texHeight = 512;
-  osg::Camera *rttCamera = createRttCamera(texWidth, texHeight, model->getBound());
-  osg::Texture *rttTexture = createRttTexture(texWidth, texHeight);
-
-  rttCamera->addChild(model);
-  rttCamera->attach(osg::Camera::COLOR_BUFFER, rttTexture);
-  quad->getOrCreateStateSet()->setTextureAttributeAndModes(0, rttTexture);
-
-  osg::ref_ptr<osg::Group> root = new osg::Group;
-  root->addChild(quad.get());
-  root->addChild(rttCamera);
+    model = osgDB::readNodeFile("cow.osg");
 
   osgViewer::Viewer viewer;
-  viewer.setSceneData(root.get());
+  viewer.addSlave(createCamera(100, 100, 400, 300), osg::Matrixd::translate(1.0, -1.0, 0.0), osg::Matrixd());
+  viewer.addSlave(createCamera(505, 100, 400, 300), osg::Matrixd::translate(-1.0, -1.0, 0.0), osg::Matrixd());
+  viewer.addSlave(createCamera(100, 405, 400, 300), osg::Matrixd::translate(1.0, 1.0, 0.0), osg::Matrixd());
+  viewer.addSlave(createCamera(505, 405, 400, 300), osg::Matrixd::translate(-1.0, 1.0, 0.0), osg::Matrixd());
+  viewer.setSceneData(model);
   return viewer.run();
 }
